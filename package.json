@@ -1,0 +1,9 @@
+{
+  "name": "lumen-livraria",
+  "private": true,
+  "description": "Lumen Livraria Católica: monorepo (backend NestJS + frontend Next.js)",
+  "scripts": {
+    "sync:schemas": "node scripts/sync-schemas.mjs",
+    "test": "npm --prefix backend test"
+  }
+}

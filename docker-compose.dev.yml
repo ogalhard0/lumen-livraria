@@ -1,0 +1,18 @@
+# Apenas o banco, para desenvolvimento local (API e site rodam com npm no seu computador).
+# Uso: docker compose -f docker-compose.dev.yml up -d
+services:
+  db:
+    image: mysql:8.0
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_0900_ai_ci", "--default-time-zone=-03:00"]
+    environment:
+      MYSQL_ROOT_PASSWORD: root_dev_pwd
+      MYSQL_DATABASE: lumen
+      MYSQL_USER: lumen
+      MYSQL_PASSWORD: lumen_dev_pwd
+      TZ: America/Sao_Paulo
+    ports:
+      - "127.0.0.1:3306:3306"
+    volumes:
+      - dbdata_dev:/var/lib/mysql
+volumes:
+  dbdata_dev:

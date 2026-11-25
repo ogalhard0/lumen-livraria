@@ -1,0 +1,120 @@
+
+# Lumen Livraria Católica: Nginx -> Next.js (web) + NestJS (api) -> MySQL
+
+services:
+  db:
+    image: mysql:8.0
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3307:3306"
+    command:
+      - "--character-set-server=utf8mb4"
+      - "--collation-server=utf8mb4_0900_ai_ci"
+      - "--default-time-zone=-03:00"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?defina MYSQL_ROOT_PASSWORD no .env}
+      MYSQL_DATABASE: lumen
+      MYSQL_USER: lumen
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?defina MYSQL_PASSWORD no .env}
+      TZ: America/Sao_Paulo
+    volumes:
+      - dbdata:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - interna
+
+  api:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 3001
+      DATABASE_URL: mysql://lumen:${MYSQL_PASSWORD}@db:3306/lumen
+      JWT_SECRET: ${JWT_SECRET:?defina JWT_SECRET no .env}
+      APP_URL: ${APP_URL:-http://localhost}
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
+      LOJA_CEP: ${LOJA_CEP:-12500000}
+      LOJA_EMAIL_CONTATO: ${LOJA_EMAIL_CONTATO:-contato@lumenlivraria.com.br}
+      PEDIDO_EXPIRA_MINUTOS: ${PEDIDO_EXPIRA_MINUTOS:-60}
+      FRETE_GRATIS_ACIMA_CENTS: ${FRETE_GRATIS_ACIMA_CENTS:-}
+      PAYMENT_PROVIDER: ${PAYMENT_PROVIDER:-mercadopago}
+      MP_ACCESS_TOKEN: ${MP_ACCESS_TOKEN:-}
+      MP_WEBHOOK_SECRET: ${MP_WEBHOOK_SECRET:-}
+      MP_NOTIFICATION_URL: ${MP_NOTIFICATION_URL:-}
+      SHIPPING_PROVIDER: ${SHIPPING_PROVIDER:-flat}
+      MELHOR_ENVIO_TOKEN: ${MELHOR_ENVIO_TOKEN:-}
+      MELHOR_ENVIO_URL: ${MELHOR_ENVIO_URL:-https://sandbox.melhorenvio.com.br}
+      MAIL_TRANSPORT: ${MAIL_TRANSPORT:-smtp}
+      MAIL_FROM: ${MAIL_FROM:-Lumen Livraria <nao-responda@lumenlivraria.com.br>}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      UPLOAD_DIR: /app/uploads
+      TZ: America/Sao_Paulo
+    volumes:
+      - uploads:/app/uploads
+    networks:
+      - interna
+
+  web:
+    build:
+      context: ./frontend
+      args:
+        BACKEND_URL: http://api:3001
+        NEXT_PUBLIC_SITE_URL: ${APP_URL:-http://localhost}
+        NEXT_PUBLIC_MP_PUBLIC_KEY: ${NEXT_PUBLIC_MP_PUBLIC_KEY:-}
+        NEXT_PUBLIC_CONTATO_EMAIL: ${LOJA_EMAIL_CONTATO:-contato@lumenlivraria.com.br}
+        NEXT_PUBLIC_CONTATO_TELEFONE: ${NEXT_PUBLIC_CONTATO_TELEFONE:-}
+        NEXT_PUBLIC_WHATSAPP: ${NEXT_PUBLIC_WHATSAPP:-}
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      INTERNAL_API_URL: http://api:3001
+    networks:
+      - interna
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    depends_on:
+      - web
+      - api
+    ports:
+      - "80:80"
+    volumes:
+      - ./deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - interna
+
+  # Ferramentas pontuais
+  tools:
+    profiles:
+      - tools
+    build:
+      context: ./backend
+      target: build
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: mysql://lumen:${MYSQL_PASSWORD}@db:3306/lumen
+      SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:-admin@lumen.local}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-}
+    networks:
+      - interna
+
+networks:
+  interna:
+
+volumes:
+  dbdata:
+  uploads:

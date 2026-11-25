@@ -1,0 +1,333 @@
+// Modelo de dados da Lumen Livraria Católica (Etapa 4, seção 6.2).
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum PerfilUsuario {
+  CLIENTE
+  ATENDENTE
+  ADMINISTRADOR
+}
+
+enum FormatoProduto {
+  FISICO
+  DIGITAL
+}
+
+enum TipoMovimentacao {
+  ENTRADA
+  RESERVA
+  LIBERACAO
+  AJUSTE
+}
+
+enum StatusPedido {
+  AGUARDANDO_PAGAMENTO
+  PAGO
+  EM_SEPARACAO
+  ENVIADO
+  PRONTO_RETIRADA
+  CONCLUIDO
+  CANCELADO
+}
+
+enum TipoEntrega {
+  ENVIO
+  RETIRADA
+}
+
+enum MetodoPagamento {
+  PIX
+  CARTAO
+}
+
+enum StatusPagamento {
+  PENDENTE
+  APROVADO
+  RECUSADO
+  CANCELADO
+  ESTORNADO
+}
+
+model Usuario {
+  id               Int           @id @default(autoincrement())
+  nome             String        @db.VarChar(120)
+  email            String        @unique @db.VarChar(190)
+  senhaHash        String        @db.VarChar(255)
+  perfil           PerfilUsuario @default(CLIENTE)
+  telefone         String?       @db.VarChar(20)
+  tentativasLogin  Int           @default(0)
+  bloqueadoAte     DateTime?
+  removidoEm       DateTime?
+  criadoEm         DateTime      @default(now())
+
+  enderecos        Endereco[]
+  refreshTokens    RefreshToken[]
+  tokensRedefinicao TokenRedefinicao[]
+  consentimentos   Consentimento[]
+  pedidos          Pedido[]
+  carrinho         Carrinho?
+  movimentacoes    MovimentacaoEstoque[]
+  auditoria        LogAuditoria[]
+
+  @@map("usuarios")
+}
+
+model RefreshToken {
+  id         Int       @id @default(autoincrement())
+  usuarioId  Int
+  tokenHash  String    @unique @db.Char(64)
+  expiraEm   DateTime
+  revogadoEm DateTime?
+  criadoEm   DateTime  @default(now())
+  usuario    Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId])
+  @@map("refresh_tokens")
+}
+
+model TokenRedefinicao {
+  id        Int       @id @default(autoincrement())
+  usuarioId Int
+  tokenHash String    @unique @db.Char(64)
+  expiraEm  DateTime
+  usadoEm   DateTime?
+  criadoEm  DateTime  @default(now())
+  usuario   Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId])
+  @@map("tokens_redefinicao")
+}
+
+model Consentimento {
+  id          Int      @id @default(autoincrement())
+  usuarioId   Int
+  finalidade  String   @db.VarChar(60)
+  versaoTermo String   @db.VarChar(20)
+  concedido   Boolean  @default(true)
+  criadoEm    DateTime @default(now())
+  usuario     Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId])
+  @@map("consentimentos")
+}
+
+model Endereco {
+  id          Int      @id @default(autoincrement())
+  usuarioId   Int?
+  cep         String   @db.Char(8)
+  logradouro  String   @db.VarChar(160)
+  numero      String   @db.VarChar(20)
+  complemento String?  @db.VarChar(80)
+  bairro      String   @db.VarChar(80)
+  cidade      String   @db.VarChar(80)
+  uf          String   @db.Char(2)
+  usuario     Usuario? @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+  pedidos     Pedido[]
+
+  @@index([usuarioId])
+  @@map("enderecos")
+}
+
+model Categoria {
+  id             Int         @id @default(autoincrement())
+  categoriaPaiId Int?
+  nome           String      @db.VarChar(80)
+  slug           String      @unique @db.VarChar(90)
+  ordem          Int         @default(0)
+  pai            Categoria?  @relation("Subcategorias", fields: [categoriaPaiId], references: [id])
+  filhas         Categoria[] @relation("Subcategorias")
+  produtos       Produto[]
+
+  @@index([categoriaPaiId])
+  @@map("categorias")
+}
+
+model Produto {
+  id            Int            @id @default(autoincrement())
+  categoriaId   Int
+  titulo        String         @db.VarChar(200)
+  autor         String         @db.VarChar(160)
+  descricao     String         @db.Text
+  preco         Decimal        @db.Decimal(10, 2)
+  slug          String         @unique @db.VarChar(100)
+  imagem        String?        @db.VarChar(300)
+  formato       FormatoProduto @default(FISICO)
+  idioma        String         @default("pt-BR") @db.VarChar(10)
+  ativo         Boolean        @default(true)
+  destaque      Boolean        @default(false)
+  estoqueAtual  Int            @default(0)
+  estoqueMinimo Int            @default(3)
+  pesoGramas    Int            @default(400)
+  alturaCm      Int            @default(3)
+  larguraCm     Int            @default(16)
+  comprimentoCm Int            @default(23)
+  criadoEm      DateTime       @default(now())
+  atualizadoEm  DateTime       @updatedAt
+
+  categoria     Categoria      @relation(fields: [categoriaId], references: [id])
+  movimentacoes MovimentacaoEstoque[]
+  itensCarrinho ItemCarrinho[]
+  itensPedido   ItemPedido[]
+
+  @@index([categoriaId])
+  @@index([ativo, destaque])
+  @@index([titulo])
+  @@index([autor])
+  @@map("produtos")
+}
+
+model MovimentacaoEstoque {
+  id         Int              @id @default(autoincrement())
+  produtoId  Int
+  tipo       TipoMovimentacao
+  quantidade Int
+  pedidoId   Int?
+  usuarioId  Int?
+  observacao String?          @db.VarChar(200)
+  criadoEm   DateTime         @default(now())
+  produto    Produto          @relation(fields: [produtoId], references: [id])
+  usuario    Usuario?         @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+
+  @@index([produtoId, criadoEm])
+  @@map("movimentacoes_estoque")
+}
+
+model Carrinho {
+  id           Int            @id @default(autoincrement())
+  usuarioId    Int            @unique
+  atualizadoEm DateTime       @updatedAt
+  usuario      Usuario        @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  itens        ItemCarrinho[]
+
+  @@map("carrinhos")
+}
+
+model ItemCarrinho {
+  id         Int      @id @default(autoincrement())
+  carrinhoId Int
+  produtoId  Int
+  quantidade Int
+  carrinho   Carrinho @relation(fields: [carrinhoId], references: [id], onDelete: Cascade)
+  produto    Produto  @relation(fields: [produtoId], references: [id], onDelete: Cascade)
+
+  @@unique([carrinhoId, produtoId])
+  @@map("itens_carrinho")
+}
+
+model Pedido {
+  id            Int          @id @default(autoincrement())
+  numero        String       @unique @db.VarChar(40)
+  usuarioId     Int
+  status        StatusPedido @default(AGUARDANDO_PAGAMENTO)
+  subtotal      Decimal      @db.Decimal(10, 2)
+  frete         Decimal      @db.Decimal(10, 2)
+  total         Decimal      @db.Decimal(10, 2)
+  tipoEntrega   TipoEntrega
+  telefone      String       @db.VarChar(20)
+  enderecoId    Int?
+  servicoFrete  String?      @db.VarChar(80)
+  prazoDias     Int?
+  expiraEm      DateTime
+  criadoEm      DateTime     @default(now())
+  atualizadoEm  DateTime     @updatedAt
+
+  usuario       Usuario      @relation(fields: [usuarioId], references: [id])
+  endereco      Endereco?    @relation(fields: [enderecoId], references: [id])
+  itens         ItemPedido[]
+  pagamentos    Pagamento[]
+  envio         Envio?
+
+  @@index([usuarioId, criadoEm])
+  @@index([status, criadoEm])
+  @@index([status, expiraEm])
+  @@map("pedidos")
+}
+
+model ItemPedido {
+  id            Int     @id @default(autoincrement())
+  pedidoId      Int
+  produtoId     Int
+  titulo        String  @db.VarChar(200)
+  quantidade    Int
+  precoUnitario Decimal @db.Decimal(10, 2)
+  pedido        Pedido  @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+  produto       Produto @relation(fields: [produtoId], references: [id])
+
+  @@index([pedidoId])
+  @@map("itens_pedido")
+}
+
+model Pagamento {
+  id           Int             @id @default(autoincrement())
+  pedidoId     Int
+  metodo       MetodoPagamento
+  idGateway    String?         @unique @db.VarChar(80)
+  status       StatusPagamento @default(PENDENTE)
+  valor        Decimal         @db.Decimal(10, 2)
+  pixCopiaCola String?         @db.Text
+  pixQrBase64  String?         @db.MediumText
+  expiraEm     DateTime?
+  criadoEm     DateTime        @default(now())
+  atualizadoEm DateTime        @updatedAt
+  pedido       Pedido          @relation(fields: [pedidoId], references: [id])
+
+  @@index([pedidoId])
+  @@map("pagamentos")
+}
+
+model Envio {
+  id             Int       @id @default(autoincrement())
+  pedidoId       Int       @unique
+  transportadora String?   @db.VarChar(80)
+  codigoRastreio String?   @db.VarChar(60)
+  dataPrevista   DateTime?
+  pedido         Pedido    @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+
+  @@map("envios")
+}
+
+model Banner {
+  id        Int       @id @default(autoincrement())
+  titulo    String    @db.VarChar(120)
+  subtitulo String?   @db.VarChar(200)
+  imagem    String?   @db.VarChar(300)
+  link      String?   @db.VarChar(300)
+  ordem     Int       @default(0)
+  ativo     Boolean   @default(true)
+  inicio    DateTime?
+  fim       DateTime?
+
+  @@map("banners")
+}
+
+model Pagina {
+  id       Int      @id @default(autoincrement())
+  slug     String   @unique @db.VarChar(80)
+  titulo   String   @db.VarChar(120)
+  conteudo String   @db.Text
+  atualizadoEm DateTime @updatedAt
+
+  @@map("paginas")
+}
+
+model LogAuditoria {
+  id         Int      @id @default(autoincrement())
+  usuarioId  Int?
+  acao       String   @db.VarChar(60)
+  entidade   String   @db.VarChar(40)
+  entidadeId String?  @db.VarChar(40)
+  detalhes   String?  @db.VarChar(400)
+  ip         String?  @db.VarChar(45)
+  criadoEm   DateTime @default(now())
+  usuario    Usuario? @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+
+  @@index([criadoEm])
+  @@index([usuarioId])
+  @@map("logs_auditoria")
+}

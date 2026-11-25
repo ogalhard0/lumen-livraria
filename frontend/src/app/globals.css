@@ -1,0 +1,18 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html { font-size: 17px; scroll-behavior: smooth; }
+  body { @apply bg-marfim text-tinta-900 antialiased; }
+  h1, h2, h3 { @apply font-bold tracking-tight text-roxo-900; }
+  /* foco bem visível (acessibilidade, público idoso) */
+  :focus-visible { outline: 3px solid #C9A227; outline-offset: 2px; border-radius: 6px; }
+  ::selection { background: #E6CB6E; color: #2A1650; }
+}
+
+@layer components {
+  .container-lumen { @apply mx-auto w-full max-w-6xl px-4 sm:px-6; }
+  .card { @apply rounded-2xl bg-white shadow-card border border-tinta-100; }
+  .link { @apply text-roxo-700 underline underline-offset-4 hover:text-roxo-500; }
+}
